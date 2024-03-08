@@ -1,5 +1,20 @@
 version: '3.9'
 
+x-elasticsearch: &elasticsearch
+  image: elasticsearch:8.12.2
+  restart: always
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.elasticsearch.rule=Host(`localhost`)"
+    - "traefik.http.routers.elasticsearch.entrypoints=elasticsearch"
+    - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
+  networks:
+    - elasticsearch_cluster
+
 services:
   traefik:
     image: traefik:v2.11
@@ -22,89 +37,43 @@ services:
       - elasticsearch_cluster
 
   es01:
-    image: elasticsearch:8.12.2
-    restart: always
+    <<: *elasticsearch
     container_name: es01
-    environment:
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - node.name=es01
-      - cluster.name=es-docker-cluster
-      - discovery.seed_hosts=es02,es03
-      - cluster.initial_master_nodes=es01,es02,es03
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.elasticsearch.rule=Host(`localhost`)"
-      - "traefik.http.routers.elasticsearch.entrypoints=elasticsearch"
-      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
+    environment: &elasticsearch-environment
+      xpack.security.enabled: 'false'
+      xpack.security.enrollment.enabled: 'false'
+      node.name: 'es01'
+      cluster.name: 'es-docker-cluster'
+      discovery.seed_hosts: 'es02,es03'
+      cluster.initial_master_nodes: 'es01,es02,es03'
+      bootstrap.memory_lock: 'true'
+      ES_JAVA_OPTS: '-Xms512m -Xmx512m'
     volumes:
         - es01_data:/usr/share/elasticsearch/data
-    networks:
-        - elasticsearch_cluster
 
   es02:
-    image: elasticsearch:8.12.2
-    restart: always
+    <<: *elasticsearch
     container_name: es02
     environment:
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - node.name=es02
-      - cluster.name=es-docker-cluster
-      - discovery.seed_hosts=es01,es03
-      - cluster.initial_master_nodes=es01,es02,es03
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.elasticsearch.rule=Host(`localhost`)"
-      - "traefik.http.routers.elasticsearch.entrypoints=elasticsearch"
-      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
+      <<: *elasticsearch-environment
+      node.name: 'es02'
+      discovery.seed_hosts: 'es01,es03'
     depends_on:
       - es01
     volumes:
         - es02_data:/usr/share/elasticsearch/data
-    networks:
-        - elasticsearch_cluster
 
   es03:
-    image: elasticsearch:8.12.2
-    restart: always
+    <<: *elasticsearch
     container_name: es03
     environment:
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - node.name=es03
-      - cluster.name=es-docker-cluster
-      - discovery.seed_hosts=es01,es02
-      - cluster.initial_master_nodes=es01,es02,es03
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.elasticsearch.rule=Host(`localhost`)"
-      - "traefik.http.routers.elasticsearch.entrypoints=elasticsearch"
-      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
+      <<: *elasticsearch-environment
+      node.name: 'es03'
+      discovery.seed_hosts: 'es01,es02'
     depends_on:
       - es02
     volumes:
         - es03_data:/usr/share/elasticsearch/data
-    networks:
-        - elasticsearch_cluster
 
   kibana:
     image: kibana:8.12.2
@@ -115,6 +84,8 @@ services:
       - "traefik.http.routers.kibana.rule=Host(`localhost`)"
       - "traefik.http.routers.kibana.entrypoints=kibana"
       - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+    profiles:
+      - debug
     networks:
       - elasticsearch_cluster
 
